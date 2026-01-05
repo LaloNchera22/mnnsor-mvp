@@ -6,7 +6,7 @@ import os
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
     page_title="Prometeo | MNNSOR",
-    page_icon="🏗️",
+    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -169,7 +169,7 @@ def show_chat_interface():
 
     # Historial de Chat
     for message in st.session_state.messages:
-        avatar = "👤" if message["role"] == "user" else "🏗️"
+        avatar = "👤" if message["role"] == "user" else "🤖"
         with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"])
 
@@ -180,7 +180,7 @@ def show_chat_interface():
             st.markdown(prompt)
 
         # RESPUESTA DE LA IA (Simulación)
-        with st.chat_message("assistant", avatar="🏗️"):
+        with st.chat_message("assistant", avatar="🤖"):
             message_placeholder = st.empty()
             full_response = ""
             # --- AQUÍ CONECTAS TU LLM REAL ---
