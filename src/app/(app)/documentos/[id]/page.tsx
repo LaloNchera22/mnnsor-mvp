@@ -3,11 +3,16 @@
 import { useMemo, useState } from "react";
 import { useParams, useRouter, notFound } from "next/navigation";
 import { getAgent } from "@/lib/agents";
-import { generateDocument } from "@/lib/generate";
+import {
+  docToMarkdown,
+  generateStructured,
+  markdownToStructured,
+  type StructuredDoc,
+} from "@/lib/generate";
 import { useStore } from "@/lib/store";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { PageHeader, Container } from "@/components/app/PageHeader";
-import { Markdown } from "@/components/app/Markdown";
+import { PaperDocument } from "@/components/app/PaperDocument";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -16,6 +21,8 @@ import { useToast } from "@/components/ui/Toast";
 import {
   IconCopy,
   IconDownload,
+  IconPrinter,
+  IconShield,
   IconSignature,
   IconTrash,
 } from "@/components/ui/icons";
@@ -26,20 +33,31 @@ export default function DocumentoPage() {
   const { documents, obras, updateDocument, deleteDocument, ready } = useStore();
   const { success, info } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [showProvenance, setShowProvenance] = useState(false);
 
   const doc = documents.find((d) => d.id === params.id);
 
-  const markdown = useMemo(() => {
-    if (!doc) return "";
-    if (doc.contenido) return doc.contenido;
+  // Documento estructurado para la vista papel: primero desde `estructura`
+  // (JSON guardado), luego reconstruido del Markdown o generado desde notas.
+  const structured = useMemo<StructuredDoc | null>(() => {
+    if (!doc) return null;
     const agent = getAgent(doc.docType);
+    const agentNombre = agent?.nombre ?? doc.docType;
+    if (doc.estructura) {
+      try {
+        return JSON.parse(doc.estructura) as StructuredDoc;
+      } catch {
+        /* cae al siguiente método */
+      }
+    }
+    if (doc.contenido) return markdownToStructured(doc.contenido, agentNombre);
     const obra = obras.find((o) => o.id === doc.obraId);
-    if (!agent) return "";
-    return generateDocument(agent, doc.notasCrudas, {
+    if (!agent) return null;
+    return generateStructured(agent, doc.notasCrudas, {
       obra: obra?.nombre ?? "—",
       cliente: obra?.cliente ?? "—",
       ubicacion: obra?.ubicacion ?? "—",
-    }).markdown;
+    });
   }, [doc, obras]);
 
   if (!ready) {
@@ -50,12 +68,13 @@ export default function DocumentoPage() {
     );
   }
 
-  if (!doc) {
+  if (!doc || !structured) {
     notFound();
   }
 
   const agent = getAgent(doc.docType);
   const obra = obras.find((o) => o.id === doc.obraId);
+  const markdown = doc.contenido || docToMarkdown(structured);
 
   async function handleCopy() {
     try {
@@ -87,6 +106,21 @@ export default function DocumentoPage() {
         title={doc.titulo}
         actions={
           <>
+            <button
+              type="button"
+              onClick={() => setShowProvenance((v) => !v)}
+              aria-pressed={showProvenance}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-[0.8125rem] font-medium transition-colors",
+                showProvenance
+                  ? "border-ink bg-ink text-on-ink"
+                  : "border-line-strong bg-surface text-ink-2 hover:border-ink/40 hover:text-ink",
+              )}
+              title="Resalta qué salió de las notas y qué es estructura"
+            >
+              <IconShield width={14} height={14} />
+              Procedencia
+            </button>
             <Button
               variant="ghost"
               size="sm"
@@ -94,6 +128,14 @@ export default function DocumentoPage() {
               onClick={handleCopy}
             >
               Copiar
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<IconPrinter width={15} height={15} />}
+              onClick={() => window.print()}
+            >
+              Imprimir / PDF
             </Button>
             <Button
               variant="secondary"
@@ -109,15 +151,28 @@ export default function DocumentoPage() {
 
       <Container className="py-8">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
-          <Card className="min-w-0">
-            <CardBody className="sm:p-8">
-              <article className="mx-auto max-w-2xl">
-                <Markdown source={markdown} />
-              </article>
-            </CardBody>
-          </Card>
+          <div className="min-w-0">
+            {showProvenance && (
+              <div className="mb-3 flex flex-wrap items-center gap-4 px-1 text-[0.75rem] text-ink-3 print:hidden">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-1 rounded-sm bg-ink" />
+                  De las notas
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-1 rounded-sm bg-line-strong" />
+                  Estructura del formato
+                </span>
+              </div>
+            )}
+            <PaperDocument
+              doc={structured}
+              folio={doc.folio}
+              showProvenance={showProvenance}
+              photos={doc.fotos}
+            />
+          </div>
 
-          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start print:hidden">
             <Card>
               <CardHeader>
                 <CardTitle>Detalle</CardTitle>

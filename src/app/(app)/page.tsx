@@ -6,6 +6,7 @@ import { PLAN_LABEL, useStore } from "@/lib/store";
 import { Container } from "@/components/app/PageHeader";
 import { AgentCard } from "@/components/app/AgentCard";
 import { DocumentRow } from "@/components/app/DocumentRow";
+import { OnboardingGuide } from "@/components/app/OnboardingGuide";
 import { Card } from "@/components/ui/Card";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -49,6 +50,7 @@ function StatCard({
 export default function DashboardPage() {
   const {
     ready,
+    onboarded,
     org,
     obras,
     documents,
@@ -56,6 +58,11 @@ export default function DashboardPage() {
     usedThisMonth,
     planLimit,
   } = useStore();
+
+  // Primer uso: onboarding guiado en vez del dashboard con datos de ejemplo.
+  if (ready && !onboarded) {
+    return <OnboardingGuide />;
+  }
 
   const hora = new Date().getHours();
   const saludo = hora < 12 ? "Buen día" : hora < 19 ? "Buenas tardes" : "Buenas noches";

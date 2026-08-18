@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/theme/ThemeProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { StoreProvider } from "@/lib/store";
+import { PwaController } from "@/components/pwa/PwaController";
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -28,6 +29,13 @@ export const metadata: Metadata = {
   description:
     "Documentación de obra asistida por IA: notas de campo → documento formal, listo para firmar.",
   applicationName: "mnnsor",
+  // El manifest lo sirve app/manifest.ts en /manifest.webmanifest y Next
+  // inyecta el <link rel="manifest"> automáticamente.
+  appleWebApp: {
+    capable: true,
+    title: "mnnsor",
+    statusBarStyle: "default",
+  },
   authors: [{ name: "mnnsor" }],
   keywords: [
     "documentación de obra",
@@ -84,7 +92,10 @@ export default function RootLayout({
         </a>
         <ThemeProvider>
           <StoreProvider>
-            <ToastProvider>{children}</ToastProvider>
+            <ToastProvider>
+              {children}
+              <PwaController />
+            </ToastProvider>
           </StoreProvider>
         </ThemeProvider>
       </body>

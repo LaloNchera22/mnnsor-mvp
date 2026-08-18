@@ -267,3 +267,83 @@ export const IconLayers = (p: IconProps) => (
     <path d="m3 12 9 5 9-5M3 17l9 5 9-5" />
   </svg>
 );
+
+export const IconMic = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="9" y="2" width="6" height="12" rx="3" />
+    <path d="M5 11a7 7 0 0 0 14 0" />
+    <path d="M12 18v3M8 21h8" />
+  </svg>
+);
+
+export const IconMicOff = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M9 9v-4a3 3 0 0 1 5.12-2.12" />
+    <path d="M15 9.34V5" />
+    <path d="M5 11a7 7 0 0 0 10.9 5.8" />
+    <path d="M19 11a7 7 0 0 1-.11 1.23" />
+    <path d="M12 18v3M8 21h8M2 2l20 20" />
+  </svg>
+);
+
+export const IconCamera = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </svg>
+);
+
+export const IconImage = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="1.5" />
+    <path d="m21 15-4.5-4.5L5 21" />
+  </svg>
+);
+
+export const IconWifiOff = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M2 2l20 20" />
+    <path d="M8.5 16.5a5 5 0 0 1 7 0" />
+    <path d="M5 12.9a10 10 0 0 1 3-2" />
+    <path d="M19 12.9a10 10 0 0 0-4.5-2.6" />
+    <path d="M2.5 9.5A15 15 0 0 1 8 6.4M16 6.6a15 15 0 0 1 5.5 3" />
+    <path d="M12 20h.01" />
+  </svg>
+);
+
+export const IconRefresh = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+    <path d="M21 3v5h-5" />
+  </svg>
+);
+
+export const IconPrinter = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M6 9V3h12v6" />
+    <path d="M6 18H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2" />
+    <rect x="6" y="14" width="12" height="7" rx="1" />
+  </svg>
+);
+
+export const IconFileText = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+    <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
+    <path d="M9 9h1M9 13h6M9 17h6" />
+  </svg>
+);
+
+export const IconCode = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m8 6-6 6 6 6M16 6l6 6-6 6" />
+  </svg>
+);
+
+export const IconInstall = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M12 8v6M9.5 11.5 12 14l2.5-2.5" />
+  </svg>
+);
