@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --papel: #f5f5f1;
+  --concreto: #dedfda;
+  --charcoal: #1a1c1d;
+  --ambar: #f5a300;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-papel text-charcoal font-sans antialiased;
+  }
+
+  /* Foco visible por teclado — piso de calidad de accesibilidad. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ambar ring-offset-2 ring-offset-papel;
+  }
+}
+
+@layer components {
+  /* Etiqueta técnica en mono, mayúsculas espaciadas (folios, metadatos). */
+  .label-tec {
+    @apply font-mono text-xs uppercase tracking-[0.14em] text-charcoal-600;
+  }
+}
+
+/* Respetar reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
