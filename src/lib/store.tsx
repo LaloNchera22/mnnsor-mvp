@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { DocType } from "@/lib/agents";
 import { getAgent } from "@/lib/agents";
+import type { Photo } from "@/lib/generate";
 import { folio, uid } from "@/lib/utils";
 
 /*
@@ -44,6 +45,10 @@ export interface DocumentItem {
   updatedAt: string;
   notasCrudas: string;
   contenido: string; // markdown-ish del documento formal generado
+  /** JSON de StructuredDoc — habilita vista papel, edición inline y procedencia. */
+  estructura?: string;
+  /** Fotos del reporte fotográfico (demo: data URLs). */
+  fotos?: Photo[];
 }
 
 export interface Org {
@@ -56,6 +61,8 @@ interface State {
   obras: Obra[];
   documents: DocumentItem[];
   currentObraId: string | null;
+  /** false en el primer uso: se muestra el onboarding guiado, no el dashboard. */
+  onboarded: boolean;
 }
 
 export const PLAN_LIMITS: Record<PlanId, number> = {
@@ -70,7 +77,22 @@ export const PLAN_LABEL: Record<PlanId, string> = {
   empresa: "Empresa",
 };
 
-const STORAGE_KEY = "mnnsor-store-v1";
+const STORAGE_KEY = "mnnsor-store-v2";
+
+/**
+ * Estado del primer uso: sin obras ni documentos de ejemplo. El dashboard
+ * detecta `onboarded: false` y abre el onboarding guiado (crear la primera
+ * obra y generar el primer documento), en vez de caer en datos semilla.
+ */
+function fresh(): State {
+  return {
+    org: { nombre: "", plan: "free" },
+    obras: [],
+    documents: [],
+    currentObraId: null,
+    onboarded: false,
+  };
+}
 
 function seed(): State {
   const now = Date.now();
@@ -150,19 +172,20 @@ function seed(): State {
     obras: [obraA, obraB],
     documents: docs,
     currentObraId: obraA.id,
+    onboarded: true,
   };
 }
 
 function load(): State {
-  if (typeof window === "undefined") return seed();
+  if (typeof window === "undefined") return fresh();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seed();
+    if (!raw) return fresh();
     const parsed = JSON.parse(raw) as State;
-    if (!parsed.obras || !parsed.documents) return seed();
-    return parsed;
+    if (!parsed.obras || !parsed.documents) return fresh();
+    return { ...fresh(), ...parsed };
   } catch {
-    return seed();
+    return fresh();
   }
 }
 
@@ -179,18 +202,24 @@ interface StoreContextValue extends State {
     notasCrudas: string;
     contenido: string;
     titulo?: string;
+    estructura?: string;
+    fotos?: Photo[];
   }) => DocumentItem;
   updateDocument: (id: string, patch: Partial<DocumentItem>) => void;
   deleteDocument: (id: string) => void;
   setPlan: (plan: PlanId) => void;
   setOrgName: (nombre: string) => void;
+  /** Marca el onboarding como completado (primer documento generado). */
+  completeOnboarding: () => void;
+  /** Carga las obras y documentos de ejemplo (explorar la demo). */
+  loadDemo: () => void;
   reset: () => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<State>(seed);
+  const [state, setState] = useState<State>(fresh);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -222,7 +251,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createDocument = useCallback<StoreContextValue["createDocument"]>(
-    ({ docType, obraId, notasCrudas, contenido, titulo }) => {
+    ({ docType, obraId, notasCrudas, contenido, titulo, estructura, fotos }) => {
       const agent = getAgent(docType);
       const seq = Math.floor(Math.random() * 900) + 10;
       const now = new Date().toISOString();
@@ -237,8 +266,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         updatedAt: now,
         notasCrudas,
         contenido,
+        estructura,
+        fotos,
       };
-      setState((s) => ({ ...s, documents: [doc, ...s.documents] }));
+      // Generar el primer documento cierra el onboarding.
+      setState((s) => ({
+        ...s,
+        onboarded: true,
+        documents: [doc, ...s.documents],
+      }));
       return doc;
     },
     [],
@@ -264,6 +300,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const setOrgName = useCallback((nombre: string) => {
     setState((s) => ({ ...s, org: { ...s.org, nombre } }));
   }, []);
+
+  const completeOnboarding = useCallback(() => {
+    setState((s) => ({ ...s, onboarded: true }));
+  }, []);
+
+  const loadDemo = useCallback(() => setState(seed()), []);
 
   const reset = useCallback(() => setState(seed()), []);
 
@@ -294,6 +336,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       deleteDocument,
       setPlan,
       setOrgName,
+      completeOnboarding,
+      loadDemo,
       reset,
     }),
     [
@@ -308,6 +352,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       deleteDocument,
       setPlan,
       setOrgName,
+      completeOnboarding,
+      loadDemo,
       reset,
     ],
   );

@@ -40,13 +40,32 @@ compilar, correr y ser probable antes de pasar a la siguiente.
     ajustes (organización, apariencia, plan, datos), y login.
   - Accesibilidad: salto al contenido, foco visible, roles/ARIA, `aria-current`,
     `prefers-reduced-motion`, y estado (no solo color) para distinguir badges.
-- [ ] Fase 2 — Auth + multi-tenant (login email/Google, organización, RLS).
-- [ ] Fase 3 — Obras + motor del agente Bitácora end-to-end + biblioteca.
-- [ ] Fase 4 — Función estrella: subir formato → llenarlo preservando formato.
-- [ ] Fase 5 — Los otros 6 agentes por configuración.
-- [ ] Fase 6 — Facturación (Stripe).
-- [ ] Fase 7 — Analítica (`usage_events`).
-- [ ] Fase 8 — Pulido.
+- [x] **Fase 2 — Experiencia de captura y del documento (UX)**
+  - **Dictado por voz** en la captura (Web Speech API, es-MX, resultados en
+    vivo): el ingeniero con casco y guantes dicta, no teclea.
+  - **PWA + captura offline**: manifest instalable y service worker que cachea
+    el shell; la captura persiste en el dispositivo y se sincroniza al recuperar
+    señal. Aviso sobrio de “sin conexión” e invitación a instalar.
+  - **Vista tipo papel/PDF** (no Markdown): hoja paginada con membrete, datos de
+    obra y bloque de firmas, tal como se imprime y se firma. Botón Imprimir / PDF
+    con CSS de impresión que aísla la hoja.
+  - **Edición inline** de cada sección del documento + **regenerar por sección**
+    (además de regenerar todo).
+  - **Streaming en vivo**: el texto se revela mientras se redacta, reemplazando
+    la animación falsa de pasos. El ritmo lo marcará el stream de Claude cuando
+    se conecte la IA.
+  - **Reporte fotográfico** con cámara/foto directa desde el móvil.
+  - **Procedencia visible**: se marca qué salió de las notas y qué es estructura
+    del formato, para reforzar que mnnsor no inventa datos.
+  - **Onboarding de primer uso**: un primer documento guiado en vez de caer en un
+    dashboard con datos de ejemplo (que quedan como opción para explorar).
+- [ ] Fase 3 — Auth + multi-tenant (login email/Google, organización, RLS).
+- [ ] Fase 4 — Obras + motor del agente Bitácora end-to-end + biblioteca.
+- [ ] Fase 5 — Función estrella: subir formato → llenarlo preservando formato.
+- [ ] Fase 6 — Los otros 6 agentes por configuración.
+- [ ] Fase 7 — Facturación (Stripe).
+- [ ] Fase 8 — Analítica (`usage_events`).
+- [ ] Fase 9 — Pulido.
 
 ## Correr en local
 
@@ -56,8 +75,13 @@ cp .env.example .env.local   # llenar las variables (ver abajo)
 npm run dev                  # http://localhost:3000
 ```
 
-En Fase 1 la home renderiza sin variables de entorno. Se vuelven necesarias a
-partir de Fase 2 (Supabase Auth).
+Las Fases 1–2 corren sin variables de entorno (el estado vive en el navegador,
+listo para reemplazarse por Supabase). Se vuelven necesarias a partir de la
+Fase 3 (Supabase Auth). En producción, **Supabase** es la base de datos y
+**Vercel** el hosting.
+
+La captura offline (PWA) sólo se activa en el build de producción: el service
+worker no se registra en `next dev`. Pruébala con `npm run build && npm start`.
 
 ### Verificaciones
 

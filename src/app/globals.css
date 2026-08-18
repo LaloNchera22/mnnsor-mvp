@@ -134,6 +134,52 @@
   }
 }
 
+/*
+ * Impresión / "Guardar como PDF": aísla la hoja del documento (.paper-sheet)
+ * y oculta el resto del chrome de la app. Así lo que se imprime es idéntico a
+ * lo que se firma: membrete, secciones y bloque de firmas, en papel blanco.
+ */
+@media print {
+  :root,
+  .dark {
+    --paper: 255 255 255;
+    --surface: 255 255 255;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .paper-sheet,
+  .paper-sheet * {
+    visibility: visible;
+  }
+
+  .paper-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
+
 /* Respetar reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   *,

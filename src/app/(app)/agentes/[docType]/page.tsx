@@ -1,16 +1,25 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, notFound } from "next/navigation";
 import { getAgent, isDocType } from "@/lib/agents";
-import { generateDocument, type GeneratedDoc } from "@/lib/generate";
+import {
+  docToMarkdown,
+  generateStructured,
+  regenerateSection,
+  type Photo,
+  type StructuredDoc,
+} from "@/lib/generate";
 import { PLAN_LABEL, useStore } from "@/lib/store";
 import { PageHeader, Container } from "@/components/app/PageHeader";
-import { Markdown } from "@/components/app/Markdown";
+import { PaperDocument } from "@/components/app/PaperDocument";
+import { PhotoCapture } from "@/components/app/PhotoCapture";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Field, Textarea } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
+import { useDictation } from "@/lib/useDictation";
+import { cn } from "@/lib/utils";
 import {
   IconArrowRight,
   IconBolt,
@@ -18,40 +27,56 @@ import {
   IconCopy,
   IconDownload,
   IconEdit,
+  IconMic,
+  IconMicOff,
+  IconPrinter,
+  IconRefresh,
   IconShield,
   IconUpload,
 } from "@/components/ui/icons";
 
-type Phase = "capture" | "generating" | "result";
+type Phase = "capture" | "streaming" | "result";
 
-const STEPS = [
-  "Leyendo notas de campo",
-  "Estructurando por secciones",
-  "Redactando en formato formal",
-  "Preparando bloque de firmas",
-];
+// Velocidad del revelado por streaming (demo). En producción, el ritmo lo
+// marca el stream de tokens de Claude vía SSE desde el servidor.
+const STREAM_CHARS_PER_TICK = 12;
+const STREAM_TICK_MS = 24;
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 export default function AgentePage() {
   const params = useParams<{ docType: string }>();
   const router = useRouter();
   const { success, info } = useToast();
-  const {
-    currentObra,
-    createDocument,
-    usedThisMonth,
-    planLimit,
-    org,
-    ready,
-  } = useStore();
+  const { currentObra, createDocument, usedThisMonth, planLimit, org, ready } =
+    useStore();
 
   const docType = params.docType;
   const agent = isDocType(docType) ? getAgent(docType) : undefined;
+  const esReporteFoto = docType === "reporte_fotografico";
 
   const [notas, setNotas] = useState("");
   const [phase, setPhase] = useState<Phase>("capture");
-  const [step, setStep] = useState(0);
-  const [result, setResult] = useState<GeneratedDoc | null>(null);
+  const [doc, setDoc] = useState<StructuredDoc | null>(null);
+  const [streamChars, setStreamChars] = useState(0);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [variant, setVariant] = useState(1);
+  const [showProvenance, setShowProvenance] = useState(true);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+
   const fileRef = useRef<HTMLInputElement>(null);
+  const streamTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Dictado por voz: cada fragmento confirmado se añade a las notas.
+  const appendDictation = useCallback((text: string) => {
+    setNotas((prev) => (prev ? `${prev.replace(/\s+$/, "")} ${text}` : text));
+  }, []);
+  const dictado = useDictation(appendDictation);
 
   const unlimited = !isFinite(planLimit);
   const overLimit = !unlimited && usedThisMonth >= planLimit;
@@ -62,50 +87,116 @@ export default function AgentePage() {
     [agent?.nombre],
   );
 
+  useEffect(() => {
+    return () => {
+      if (streamTimer.current) clearInterval(streamTimer.current);
+    };
+  }, []);
+
   if (!agent) {
     notFound();
   }
 
+  // Para el reporte fotográfico, las descripciones de las fotos alimentan la
+  // generación aunque el campo de notas esté vacío.
+  function notasEfectivas(): string {
+    if (esReporteFoto && photos.length) {
+      const pies = photos
+        .map((p, i) => (p.caption ? `foto ${i + 1}: ${p.caption}` : ""))
+        .filter(Boolean)
+        .join(", ");
+      return [notas.trim(), pies].filter(Boolean).join(", ");
+    }
+    return notas;
+  }
+
+  const puedeGenerar =
+    ready &&
+    !overLimit &&
+    (notas.trim().length >= 8 || (esReporteFoto && photos.length > 0));
+
+  function startStreaming(structured: StructuredDoc) {
+    const total = structured.sections.reduce((n, s) => n + s.body.length, 0);
+    if (prefersReducedMotion()) {
+      setStreamChars(total);
+      setPhase("result");
+      return;
+    }
+    setPhase("streaming");
+    setStreamChars(0);
+    if (streamTimer.current) clearInterval(streamTimer.current);
+    streamTimer.current = setInterval(() => {
+      setStreamChars((c) => {
+        const next = c + STREAM_CHARS_PER_TICK;
+        if (next >= total) {
+          if (streamTimer.current) clearInterval(streamTimer.current);
+          setPhase("result");
+          return total;
+        }
+        return next;
+      });
+    }, STREAM_TICK_MS);
+  }
+
   function runGeneration() {
     if (!agent || !currentObra) return;
-    setPhase("generating");
-    setStep(0);
-    // Animación de pasos (demo). En producción es streaming del modelo.
-    let s = 0;
-    const timer = setInterval(() => {
-      s += 1;
-      if (s < STEPS.length) {
-        setStep(s);
-      } else {
-        clearInterval(timer);
-        const doc = generateDocument(agent, notas, {
-          obra: currentObra.nombre,
-          cliente: currentObra.cliente,
-          ubicacion: currentObra.ubicacion,
-        });
-        setResult(doc);
-        setPhase("result");
-      }
-    }, 620);
+    if (dictado.listening) dictado.stop();
+    const structured = generateStructured(agent, notasEfectivas(), {
+      obra: currentObra.nombre,
+      cliente: currentObra.cliente,
+      ubicacion: currentObra.ubicacion,
+    });
+    setDoc(structured);
+    setVariant(1);
+    startStreaming(structured);
+  }
+
+  function handleEditSection(id: string, body: string) {
+    setDoc((d) =>
+      d
+        ? {
+            ...d,
+            // Editado a mano: ahora es texto del usuario (procedencia "notas").
+            sections: d.sections.map((s) =>
+              s.id === id ? { ...s, body, source: "notas" } : s,
+            ),
+          }
+        : d,
+    );
+  }
+
+  function handleRegenerateSection(id: string) {
+    if (!agent || !doc) return;
+    setRegeneratingId(id);
+    const v = variant + 1;
+    setVariant(v);
+    // Simula la latencia de una llamada acotada al modelo.
+    window.setTimeout(() => {
+      setDoc((d) => (d ? regenerateSection(agent, notasEfectivas(), d, id, v) : d));
+      setRegeneratingId(null);
+    }, 650);
   }
 
   function handleSave() {
-    if (!agent || !result || !currentObra) return;
-    const doc = createDocument({
+    if (!agent || !doc || !currentObra) return;
+    const markdown = docToMarkdown(doc);
+    const saved = createDocument({
       docType: agent.docType,
       obraId: currentObra.id,
-      notasCrudas: notas,
-      contenido: result.markdown,
-      titulo: result.titulo,
+      notasCrudas: notasEfectivas(),
+      contenido: markdown,
+      titulo: doc.titulo,
+      estructura: JSON.stringify(doc),
+      fotos: esReporteFoto && photos.length ? photos : undefined,
     });
-    success("Documento guardado", `${doc.folio} archivado en ${currentObra.nombre}.`);
-    router.push(`/documentos/${doc.id}`);
+    success("Documento guardado", `${saved.folio} archivado en ${currentObra.nombre}.`);
+    router.push(`/documentos/${saved.id}`);
   }
 
   async function handleCopy() {
-    if (!result) return;
+    if (!doc) return;
     try {
-      await navigator.clipboard.writeText(result.markdown);
+      await navigator.clipboard.writeText(docToMarkdown(doc));
       info("Copiado", "El documento está en el portapapeles.");
     } catch {
       info("No se pudo copiar", "Tu navegador bloqueó el portapapeles.");
@@ -113,8 +204,10 @@ export default function AgentePage() {
   }
 
   function handleDownload() {
-    if (!result) return;
-    const blob = new Blob([result.markdown], { type: "text/markdown;charset=utf-8" });
+    if (!doc) return;
+    const blob = new Blob([docToMarkdown(doc)], {
+      type: "text/markdown;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -168,23 +261,104 @@ export default function AgentePage() {
                       </p>
                     </div>
                   )}
+
                   <Field
                     label="Escribe como hablas en campo"
                     description={agent.pista}
                     hint={`${wordCount} palabras`}
                   >
                     {({ id, describedBy }) => (
-                      <Textarea
-                        id={id}
-                        aria-describedby={describedBy}
-                        value={notas}
-                        onChange={(e) => setNotas(e.target.value)}
-                        placeholder={agent.ejemplo}
-                        className="min-h-[220px]"
-                        disabled={overLimit}
-                      />
+                      <div className="relative">
+                        <Textarea
+                          id={id}
+                          aria-describedby={describedBy}
+                          value={notas}
+                          onChange={(e) => setNotas(e.target.value)}
+                          placeholder={agent.ejemplo}
+                          className={cn(
+                            "min-h-[220px] pr-14",
+                            dictado.listening && "border-ink",
+                          )}
+                          disabled={overLimit}
+                        />
+                        {/* Botón de dictado por voz. */}
+                        {dictado.supported && (
+                          <button
+                            type="button"
+                            onClick={dictado.toggle}
+                            disabled={overLimit}
+                            aria-pressed={dictado.listening}
+                            aria-label={
+                              dictado.listening ? "Detener dictado" : "Dictar por voz"
+                            }
+                            title={
+                              dictado.listening ? "Detener dictado" : "Dictar por voz"
+                            }
+                            className={cn(
+                              "absolute right-2.5 top-2.5 inline-flex h-10 w-10 items-center justify-center rounded-md border transition-colors disabled:opacity-40",
+                              dictado.listening
+                                ? "border-ink bg-ink text-on-ink"
+                                : "border-line-strong bg-surface text-ink-2 hover:border-ink/40 hover:text-ink",
+                            )}
+                          >
+                            {dictado.listening ? (
+                              <span className="relative flex items-center justify-center">
+                                <IconMic width={18} height={18} />
+                                <span className="absolute -inset-2 animate-ping rounded-full border border-on-ink/50" />
+                              </span>
+                            ) : (
+                              <IconMic width={18} height={18} />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </Field>
+
+                  {/* Estado del dictado. */}
+                  {dictado.supported ? (
+                    dictado.listening || dictado.interim ? (
+                      <div
+                        aria-live="polite"
+                        className="flex items-start gap-2 rounded-md border border-line bg-surface-2/60 px-3 py-2 text-[0.8125rem]"
+                      >
+                        <span className="mt-0.5 flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-ink" />
+                        <span className="text-ink-3">
+                          {dictado.interim ? (
+                            <>
+                              <span className="text-muted">…</span> {dictado.interim}
+                            </>
+                          ) : (
+                            "Escuchando… habla con normalidad; el texto se agrega a tus notas."
+                          )}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-[0.75rem] text-ink-3">
+                        <IconMic width={13} height={13} />
+                        Toca el micrófono y dicta: “clima despejado, catorce
+                        trabajadores…”. mnnsor escribe por ti.
+                      </p>
+                    )
+                  ) : (
+                    <p className="flex items-center gap-1.5 text-[0.75rem] text-muted">
+                      <IconMicOff width={13} height={13} />
+                      El dictado por voz no está disponible en este navegador.
+                    </p>
+                  )}
+                  {dictado.error && (
+                    <p className="text-[0.75rem] text-ink" role="alert">
+                      {dictado.error}
+                    </p>
+                  )}
+
+                  {/* Fotos del reporte fotográfico. */}
+                  {esReporteFoto && (
+                    <div className="rounded-md border border-line bg-surface-2/40 p-3">
+                      <p className="label-tec mb-2">Fotos del reporte</p>
+                      <PhotoCapture photos={photos} onChange={setPhotos} />
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
@@ -195,29 +369,33 @@ export default function AgentePage() {
                     >
                       Usar ejemplo
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={<IconUpload width={15} height={15} />}
-                      onClick={() => fileRef.current?.click()}
-                    >
-                      Subir mi formato
-                    </Button>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx,.xlsx,.jpg,.png"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) {
-                          info(
-                            "Formato recibido",
-                            "La función estrella (llenar tu propio formato) llega en Fase 4.",
-                          );
-                          e.target.value = "";
-                        }
-                      }}
-                    />
+                    {!esReporteFoto && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<IconUpload width={15} height={15} />}
+                          onClick={() => fileRef.current?.click()}
+                        >
+                          Subir mi formato
+                        </Button>
+                        <input
+                          ref={fileRef}
+                          type="file"
+                          accept=".pdf,.doc,.docx,.xlsx,.jpg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) {
+                              info(
+                                "Formato recibido",
+                                "La función estrella (llenar tu propio formato) llega en Fase 4.",
+                              );
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                      </>
+                    )}
                     {notas && (
                       <Button
                         variant="ghost"
@@ -238,7 +416,7 @@ export default function AgentePage() {
                     variant="primary"
                     leftIcon={<IconBolt width={16} height={16} />}
                     onClick={runGeneration}
-                    disabled={notas.trim().length < 8 || overLimit || !ready}
+                    disabled={!puedeGenerar}
                   >
                     Generar documento
                   </Button>
@@ -246,103 +424,123 @@ export default function AgentePage() {
               </Card>
             )}
 
-            {phase === "generating" && (
-              <Card>
-                <CardBody className="py-10">
-                  <div className="mx-auto max-w-sm">
-                    <div className="mb-6 flex items-center justify-center">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-ink bg-ink text-on-ink">
-                        <IconBolt width={22} height={22} />
-                      </span>
+            {(phase === "streaming" || phase === "result") && doc && (
+              <div className="space-y-3">
+                {/* Barra de herramientas del documento. */}
+                <div className="flex flex-col gap-3 rounded-md border border-line bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
+                  <div className="flex items-center gap-2 text-sm">
+                    {phase === "streaming" ? (
+                      <>
+                        <span className="flex h-2 w-2 animate-pulse rounded-full bg-ink" />
+                        <span className="font-medium text-ink">
+                          Redactando en vivo…
+                        </span>
+                        <span className="text-ink-3">
+                          a partir de tus notas de campo
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <IconCheck width={16} height={16} className="text-ink" />
+                        <span className="font-medium text-ink">Documento generado</span>
+                      </>
+                    )}
+                  </div>
+                  {phase === "result" && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowProvenance((v) => !v)}
+                        aria-pressed={showProvenance}
+                        className={cn(
+                          "inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-[0.8125rem] font-medium transition-colors",
+                          showProvenance
+                            ? "border-ink bg-ink text-on-ink"
+                            : "border-line-strong bg-surface text-ink-2 hover:border-ink/40 hover:text-ink",
+                        )}
+                        title="Resalta qué salió de tus notas y qué es estructura"
+                      >
+                        <IconShield width={14} height={14} />
+                        Procedencia
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<IconCopy width={15} height={15} />}
+                        onClick={handleCopy}
+                      >
+                        Copiar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<IconDownload width={15} height={15} />}
+                        onClick={handleDownload}
+                      >
+                        Descargar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<IconPrinter width={15} height={15} />}
+                        onClick={() => window.print()}
+                      >
+                        Imprimir / PDF
+                      </Button>
                     </div>
-                    <p className="text-center text-sm font-medium text-ink">
-                      Generando {agent.nombre.toLowerCase()}…
-                    </p>
-                    <ul className="mt-6 space-y-3">
-                      {STEPS.map((label, i) => {
-                        const done = i < step;
-                        const activeStep = i === step;
-                        return (
-                          <li key={label} className="flex items-center gap-3 text-sm">
-                            <span
-                              className={
-                                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border " +
-                                (done
-                                  ? "border-ink bg-ink text-on-ink"
-                                  : activeStep
-                                    ? "border-ink text-ink"
-                                    : "border-line text-muted")
-                              }
-                            >
-                              {done ? (
-                                <IconCheck width={13} height={13} />
-                              ) : activeStep ? (
-                                <span className="h-2 w-2 animate-caret-blink rounded-full bg-ink" />
-                              ) : (
-                                <span className="font-mono text-[0.625rem]">{i + 1}</span>
-                              )}
-                            </span>
-                            <span className={done || activeStep ? "text-ink" : "text-muted"}>
-                              {label}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                </CardBody>
-              </Card>
-            )}
-
-            {phase === "result" && result && (
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <IconCheck width={16} height={16} className="text-ink" />
-                    <CardTitle>Documento generado</CardTitle>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={<IconCopy width={15} height={15} />}
-                      onClick={handleCopy}
-                    >
-                      Copiar
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={<IconDownload width={15} height={15} />}
-                      onClick={handleDownload}
-                    >
-                      Descargar
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardBody>
-                  <article className="rounded-md border border-line bg-surface-2/40 p-5 sm:p-6">
-                    <Markdown source={result.markdown} />
-                  </article>
-                </CardBody>
-                <div className="flex flex-col-reverse gap-3 border-t border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <Button variant="ghost" onClick={runGeneration}>
-                    Regenerar
-                  </Button>
-                  <Button
-                    variant="primary"
-                    rightIcon={<IconArrowRight width={16} height={16} />}
-                    onClick={handleSave}
-                  >
-                    Guardar en la obra
-                  </Button>
+                  )}
                 </div>
-              </Card>
+
+                {/* Leyenda de procedencia. */}
+                {phase === "result" && showProvenance && (
+                  <div className="flex flex-wrap items-center gap-4 px-1 text-[0.75rem] text-ink-3 print:hidden">
+                    <span className="flex items-center gap-1.5">
+                      <span className="inline-block h-3 w-1 rounded-sm bg-ink" />
+                      De tus notas
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="inline-block h-3 w-1 rounded-sm bg-line-strong" />
+                      Estructura del formato (sin dato inventado)
+                    </span>
+                  </div>
+                )}
+
+                <PaperDocument
+                  doc={doc}
+                  folio={`${agent.slug}-•••`}
+                  editable={phase === "result"}
+                  onEditSection={handleEditSection}
+                  onRegenerateSection={handleRegenerateSection}
+                  regeneratingId={regeneratingId}
+                  showProvenance={phase === "result" && showProvenance}
+                  streamChars={phase === "streaming" ? streamChars : undefined}
+                  photos={esReporteFoto ? photos : undefined}
+                />
+
+                {phase === "result" && (
+                  <div className="flex flex-col-reverse gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
+                    <Button
+                      variant="ghost"
+                      leftIcon={<IconRefresh width={16} height={16} />}
+                      onClick={runGeneration}
+                    >
+                      Regenerar todo
+                    </Button>
+                    <Button
+                      variant="primary"
+                      rightIcon={<IconArrowRight width={16} height={16} />}
+                      onClick={handleSave}
+                    >
+                      Guardar en la obra
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
           {/* Panel lateral: qué produce este agente */}
-          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start print:hidden">
             <Card>
               <CardHeader>
                 <CardTitle>Qué incluye</CardTitle>
@@ -362,10 +560,11 @@ export default function AgentePage() {
               </CardBody>
             </Card>
             <div className="rounded-lg border border-dashed border-line-strong bg-surface-2/40 p-4">
-              <p className="label-tec mb-1.5">Buenas prácticas</p>
+              <p className="label-tec mb-1.5">Cómo se ve</p>
               <p className="text-[0.8125rem] leading-relaxed text-ink-3">
-                Revisa siempre el documento antes de firmar. mnnsor estructura y
-                redacta, pero la responsabilidad técnica es de quien firma.
+                Vista tal como se imprime y se firma: con membrete, obra y bloque
+                de firmas. Puedes editar cada sección o regenerarla por separado
+                antes de guardar.
               </p>
             </div>
             <ButtonLink href="/documentos" variant="ghost" size="sm" className="w-full">
