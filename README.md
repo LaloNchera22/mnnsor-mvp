@@ -10,7 +10,10 @@ residencia.
 ## Stack
 
 - **Next.js (App Router) + TypeScript** — frontend y backend, desplegado en Vercel.
-- **Tailwind CSS** — sistema de diseño industrial (charcoal / concreto / papel / ámbar, IBM Plex).
+- **Tailwind CSS** — sistema de diseño industrial **estrictamente monocromo**
+  (tinta sobre papel, IBM Plex), con tema claro/oscuro por variables CSS y la
+  clase `.dark`. La marca (isotipo + wordmark) se sirve desde `/public/brand`
+  en variante negra o blanca según el tema.
 - **Supabase** — Postgres + Auth + Storage, con RLS por organización.
 - **Stripe** — Checkout, Customer Portal y webhooks.
 - **Anthropic API (Claude)** — los agentes, siempre desde el servidor.
@@ -20,12 +23,23 @@ residencia.
 Se construye por fases (ver la especificación de producto, §9). Cada fase debe
 compilar, correr y ser probable antes de pasar a la siguiente.
 
-- [x] **Fase 1 — Scaffold + sistema de diseño + home**
-  - Next.js + TS + Tailwind, tokens de diseño mnnsor (IBM Plex Sans/Mono).
+- [x] **Fase 1 — Scaffold + sistema de diseño + producto navegable**
+  - Next.js + TS + Tailwind, tokens de diseño mnnsor monocromo (IBM Plex),
+    tema claro/oscuro/sistema sin parpadeo.
   - Clientes de Supabase (navegador + servidor) listos para Fase 2.
   - Catálogo de los 7 agentes como configuración compartida.
-  - Home / dashboard: barra con selector de obra y estado de plan, grid de
-    agentes, actividad reciente. Datos aún son placeholders.
+  - **App shell** completo: sidebar con navegación y agentes, barra superior
+    con selector de obra, plan/consumo, tema y menú de cuenta, paleta de
+    comandos (⌘K), y drawer móvil.
+  - **UI kit** reutilizable: Button, Card, Field/Input/Select/Textarea, Badge,
+    Modal accesible (focus-trap), Toasts, Menu, Progress, Skeleton, EmptyState.
+  - **Flujos navegables** (con store de demo en `localStorage`, listo para
+    reemplazar por Supabase): dashboard con métricas, obras (CRUD), biblioteca
+    de documentos con búsqueda y filtros, detalle de documento (copiar,
+    descargar, firmar, eliminar), captura → generación → revisión del agente,
+    ajustes (organización, apariencia, plan, datos), y login.
+  - Accesibilidad: salto al contenido, foco visible, roles/ARIA, `aria-current`,
+    `prefers-reduced-motion`, y estado (no solo color) para distinguir badges.
 - [ ] Fase 2 — Auth + multi-tenant (login email/Google, organización, RLS).
 - [ ] Fase 3 — Obras + motor del agente Bitácora end-to-end + biblioteca.
 - [ ] Fase 4 — Función estrella: subir formato → llenarlo preservando formato.
