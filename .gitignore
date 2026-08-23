@@ -29,3 +29,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+apps/web/.next
+.turbo
+apps/web/.turbo
+apps/web/node_modules
+node_modules
+build.log
