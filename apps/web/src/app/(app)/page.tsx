@@ -88,11 +88,11 @@ export default function DashboardPage() {
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-2.5">
             <ButtonLink
-              href="/agentes/bitacora"
+              href="/agentes/atlas"
               variant="primary"
               rightIcon={<IconArrowRight width={16} height={16} />}
             >
-              Nueva bitácora
+              Nuevo documento
             </ButtonLink>
             <ButtonLink href="/documentos" variant="secondary">
               Ver documentos

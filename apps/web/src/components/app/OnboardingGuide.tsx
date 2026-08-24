@@ -69,7 +69,7 @@ export function OnboardingGuide() {
       ubicacion: ubicacion.trim() || "Querétaro, Qro.",
     });
     success("Obra creada", `“${obra.nombre}” está lista. Generemos tu primer documento.`);
-    router.push("/agentes/bitacora");
+    router.push("/agentes/atlas");
   }
 
   return (

@@ -147,7 +147,7 @@ export default function AgentePage() {
     setStreamChars(0);
 
     try {
-      const res = await fetch("/api/agentes/bitacora", {
+      const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -224,14 +224,23 @@ export default function AgentePage() {
         setVariant(1);
       } catch (err) {
         console.error("Failed to parse JSON stream", err);
-        warning("Error", "El documento generado no es válido.");
-        setPhase("capture");
+        fallbackGeneration();
       }
     } catch (err) {
-      console.error(err);
-      warning("Error", "Hubo un problema al contactar a la IA.");
-      setPhase("capture");
+      console.error("API error", err);
+      fallbackGeneration();
     }
+  }
+
+  function fallbackGeneration() {
+    // Fallback a generación demo estructurada (Fase 1/2) si no hay API
+    const structured = generateStructured(agent!, notasEfectivas(), {
+      obra: currentObra!.nombre,
+      cliente: currentObra!.cliente || "—",
+      ubicacion: currentObra!.ubicacion || "—",
+    });
+    setDoc(structured);
+    startStreaming(structured);
   }
 
   function handleEditSection(id: string, body: string) {
