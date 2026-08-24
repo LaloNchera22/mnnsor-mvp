@@ -11,6 +11,7 @@ import {
   type StructuredDoc,
 } from "@/lib/generate";
 import { PLAN_LABEL, useStore } from "@/lib/store";
+import { createDocument } from "@/app/(app)/documentos/actions";
 import { PageHeader, Container } from "@/components/app/PageHeader";
 import { PaperDocument } from "@/components/app/PaperDocument";
 import { PhotoCapture } from "@/components/app/PhotoCapture";
@@ -52,8 +53,8 @@ function prefersReducedMotion(): boolean {
 export default function AgentePage() {
   const params = useParams<{ docType: string }>();
   const router = useRouter();
-  const { success, info } = useToast();
-  const { currentObra, createDocument, usedThisMonth, planLimit, org, ready } =
+  const { success, info, warning } = useToast();
+  const { currentObra, usedThisMonth, planLimit, org, ready } =
     useStore();
 
   const docType = params.docType;
@@ -138,17 +139,99 @@ export default function AgentePage() {
     }, STREAM_TICK_MS);
   }
 
-  function runGeneration() {
+  async function runGeneration() {
     if (!agent || !currentObra) return;
     if (dictado.listening) dictado.stop();
-    const structured = generateStructured(agent, notasEfectivas(), {
-      obra: currentObra.nombre,
-      cliente: currentObra.cliente,
-      ubicacion: currentObra.ubicacion,
-    });
-    setDoc(structured);
-    setVariant(1);
-    startStreaming(structured);
+
+    setPhase("streaming");
+    setStreamChars(0);
+
+    try {
+      const res = await fetch("/api/agentes/bitacora", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notasCrudas: notasEfectivas(),
+          agentConfig: agent
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to generate document");
+      }
+
+      // Since it's an SSE stream from Anthropic, we need to parse SSE events
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      let fullText = "";
+      if (reader) {
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+
+          // Keep the last partial line in the buffer
+          buffer = lines.pop() || "";
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6);
+              if (dataStr === '[DONE]') continue;
+
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.type === 'content_block_delta' && data.delta && data.delta.text) {
+                  fullText += data.delta.text;
+                  setStreamChars(fullText.length);
+                }
+              } catch (e) {
+                // Ignore partial JSON parsing errors
+              }
+            }
+          }
+        }
+      }
+
+      // The full text should be JSON string
+      try {
+        const parsed = JSON.parse(fullText);
+        // Build the StructuredDoc compatible with UI
+        const structured: StructuredDoc = {
+          titulo: parsed.titulo || `Generado por ${agent.nombre}`,
+          agentNombre: agent.nombre,
+          meta: {
+            obra: currentObra.nombre,
+            cliente: currentObra.cliente || "—",
+            ubicacion: currentObra.ubicacion || "—",
+            fecha: new Date().toLocaleDateString("es-MX", { dateStyle: "long" }),
+          },
+          sections: parsed.secciones.map((sec: any) => ({
+            id: `sec_${sec.numero}`,
+            numero: sec.numero,
+            heading: sec.heading,
+            body: sec.body,
+            source: sec.source || "notas",
+          })),
+        };
+
+        setDoc(structured);
+        setPhase("result");
+        setVariant(1);
+      } catch (err) {
+        console.error("Failed to parse JSON stream", err);
+        warning("Error", "El documento generado no es válido.");
+        setPhase("capture");
+      }
+    } catch (err) {
+      console.error(err);
+      warning("Error", "Hubo un problema al contactar a la IA.");
+      setPhase("capture");
+    }
   }
 
   function handleEditSection(id: string, body: string) {
@@ -177,20 +260,26 @@ export default function AgentePage() {
     }, 650);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!agent || !doc || !currentObra) return;
     const markdown = docToMarkdown(doc);
-    const saved = createDocument({
-      docType: agent.docType,
-      obraId: currentObra.id,
-      notasCrudas: notasEfectivas(),
-      contenido: markdown,
-      titulo: doc.titulo,
-      estructura: JSON.stringify(doc),
-      fotos: esReporteFoto && photos.length ? photos : undefined,
-    });
-    success("Documento guardado", `${saved.folio} archivado en ${currentObra.nombre}.`);
-    router.push(`/documentos/${saved.id}`);
+
+    try {
+      const saved = await createDocument({
+        doc_type: agent.docType,
+        project_id: currentObra.id,
+        notas_crudas: notasEfectivas(),
+        contenido: markdown,
+        titulo: doc.titulo,
+        estructura: doc,
+        fotos: esReporteFoto && photos.length ? photos : undefined,
+      });
+      success("Documento guardado", `${saved.folio || "S/N"} archivado en ${currentObra.nombre}.`);
+      router.push(`/documentos`);
+    } catch (err) {
+      console.error(err);
+      warning("Error", "No se pudo guardar el documento.");
+    }
   }
 
   async function handleCopy() {

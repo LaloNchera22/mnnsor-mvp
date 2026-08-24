@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { useStore } from "@/lib/store";
 import { useToast } from "@/components/ui/Toast";
+import { createObra } from "@/app/(app)/obras/actions";
 
 export function NewObraModal({
   open,
@@ -16,8 +17,8 @@ export function NewObraModal({
   onClose: () => void;
   onCreated?: (id: string) => void;
 }) {
-  const { addObra } = useStore();
-  const { success } = useToast();
+  const { setCurrentObra } = useStore();
+  const { success, warning } = useToast();
   const [nombre, setNombre] = useState("");
   const [cliente, setCliente] = useState("");
   const [ubicacion, setUbicacion] = useState("");
@@ -32,19 +33,26 @@ export function NewObraModal({
     setTouched(false);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setTouched(true);
     if (!valid) return;
-    const obra = addObra({
-      nombre: nombre.trim(),
-      cliente: cliente.trim() || "—",
-      ubicacion: ubicacion.trim() || "Querétaro, Qro.",
-    });
-    success("Obra creada", `“${obra.nombre}” está lista para documentar.`);
-    reset();
-    onClose();
-    onCreated?.(obra.id);
+
+    try {
+      const obra = await createObra({
+        nombre: nombre.trim(),
+        cliente: cliente.trim() || "—",
+        ubicacion: ubicacion.trim() || "Querétaro, Qro.",
+      });
+      setCurrentObra(obra.id);
+      success("Obra creada", `“${obra.nombre}” está lista para documentar.`);
+      reset();
+      onClose();
+      onCreated?.(obra.id);
+    } catch (error) {
+      console.error(error);
+      warning("Error", "No se pudo crear la obra.");
+    }
   }
 
   return (

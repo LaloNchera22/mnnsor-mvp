@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { AGENTS } from "@/lib/agents";
 import { useStore, type DocStatus } from "@/lib/store";
 import { PageHeader, Container } from "@/components/app/PageHeader";
 import { DocumentRow } from "@/components/app/DocumentRow";
+import { getDocuments, DocumentRow as DBDocumentRow } from "@/app/(app)/documentos/actions";
 import { Card } from "@/components/ui/Card";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -20,22 +21,41 @@ const STATUS: { value: DocStatus | "todos"; label: string }[] = [
 ];
 
 export default function DocumentosPage() {
-  const { documents, obras, currentObra, ready } = useStore();
+  const { obras, currentObra, ready } = useStore();
   const [q, setQ] = useState("");
   const [tipo, setTipo] = useState<string>("todos");
   const [status, setStatus] = useState<string>("todos");
   const [scope, setScope] = useState<"obra" | "todas">("obra");
 
+  const [documents, setDocuments] = useState<DBDocumentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const fetched = await getDocuments();
+        setDocuments(fetched);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (ready) {
+      load();
+    }
+  }, [ready]);
+
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     return documents
-      .filter((d) => (scope === "obra" && currentObra ? d.obraId === currentObra.id : true))
-      .filter((d) => (tipo === "todos" ? true : d.docType === tipo))
+      .filter((d) => (scope === "obra" && currentObra ? d.project_id === currentObra.id : true))
+      .filter((d) => (tipo === "todos" ? true : d.doc_type === tipo))
       .filter((d) => (status === "todos" ? true : d.status === status))
       .filter((d) =>
-        query ? `${d.titulo} ${d.folio} ${d.notasCrudas}`.toLowerCase().includes(query) : true,
+        query ? `${d.titulo} ${d.folio} ${d.notas_crudas}`.toLowerCase().includes(query) : true,
       )
-      .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+      .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at));
   }, [documents, q, tipo, status, scope, currentObra]);
 
   return (
@@ -110,7 +130,7 @@ export default function DocumentosPage() {
           </div>
         </div>
 
-        {!ready ? (
+        {!ready || loading ? (
           <Card className="divide-y divide-line">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-center gap-4 p-4">
@@ -146,13 +166,29 @@ export default function DocumentosPage() {
               {filtered.length} {filtered.length === 1 ? "documento" : "documentos"}
             </p>
             <Card className="divide-y divide-line overflow-hidden">
-              {filtered.map((doc) => (
-                <DocumentRow
-                  key={doc.id}
-                  doc={doc}
-                  obraNombre={obras.find((o) => o.id === doc.obraId)?.nombre}
-                />
-              ))}
+              {filtered.map((doc) => {
+                const uiDoc = {
+                  id: doc.id,
+                  folio: doc.folio || "S/N",
+                  docType: doc.doc_type as any,
+                  titulo: doc.titulo || "Sin título",
+                  obraId: doc.project_id,
+                  status: (doc.status || "borrador") as DocStatus,
+                  createdAt: doc.created_at,
+                  updatedAt: doc.updated_at,
+                  notasCrudas: doc.notas_crudas || "",
+                  contenido: doc.contenido || "",
+                  estructura: doc.estructura ? JSON.stringify(doc.estructura) : undefined,
+                  fotos: doc.fotos || [],
+                };
+                return (
+                  <DocumentRow
+                    key={doc.id}
+                    doc={uiDoc}
+                    obraNombre={obras.find((o) => o.id === doc.project_id)?.nombre}
+                  />
+                );
+              })}
             </Card>
           </>
         )}
