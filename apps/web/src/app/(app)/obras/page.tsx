@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { formatDate, cn } from "@/lib/utils";
 import { PageHeader, Container } from "@/components/app/PageHeader";
 import { NewObraModal } from "@/components/app/NewObraModal";
+import { getObras, ObraRow } from "@/app/(app)/obras/actions";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -18,9 +19,27 @@ import {
 } from "@/components/ui/icons";
 
 export default function ObrasPage() {
-  const { obras, documents, currentObra, setCurrentObra, ready } = useStore();
+  const { documents, currentObra, setCurrentObra, ready } = useStore();
   const router = useRouter();
   const [newOpen, setNewOpen] = useState(false);
+  const [obras, setObras] = useState<ObraRow[]>([]);
+  const [loadingObras, setLoadingObras] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const fetched = await getObras();
+        setObras(fetched);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingObras(false);
+      }
+    }
+    if (ready) {
+      load();
+    }
+  }, [ready, newOpen]);
 
   return (
     <>
@@ -40,7 +59,7 @@ export default function ObrasPage() {
       />
 
       <Container className="py-8">
-        {!ready ? (
+        {!ready || loadingObras ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-40" />
@@ -97,7 +116,7 @@ export default function ObrasPage() {
                     </div>
                   </dl>
                   <p className="mt-3 text-[0.6875rem] text-muted">
-                    Creada {formatDate(obra.createdAt)}
+                    Creada {formatDate(obra.created_at)}
                   </p>
                   <div className="mt-4 flex items-center gap-2">
                     {active ? (
