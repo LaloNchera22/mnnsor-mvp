@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
+import { type AgentConfig } from "@/lib/agents";
 
 export async function POST(req: Request) {
   try {
-    const { notasCrudas, agentConfig } = await req.json();
+    const { notasCrudas, agentConfig } = await req.json() as {
+      notasCrudas: string;
+      agentConfig: AgentConfig;
+    };
 
     if (!notasCrudas || !agentConfig) {
       return NextResponse.json(
-        { error: "Missing notasCrudas or agentConfig" },
+        { error: "Faltan notasCrudas o agentConfig" },
         { status: 400 }
       );
     }
@@ -15,14 +19,14 @@ export async function POST(req: Request) {
 
     if (!anthropicApiKey) {
       return NextResponse.json(
-        { error: "Anthropic API key is not configured." },
+        { error: "La API key de Anthropic no está configurada." },
         { status: 500 }
       );
     }
 
     const sectionsList = agentConfig.secciones
       .map((sec: string, index: number) => `${index + 1}. ${sec}`)
-      .join("\\n");
+      .join("\n");
 
     const systemPrompt = `You are an expert construction site assistant.
 Your job is to generate a structured document based on raw field notes.
@@ -40,7 +44,7 @@ Return ONLY a valid JSON object matching the following structure. Do not return 
       "numero": 1,
       "heading": "Section Heading",
       "body": "Detailed content based on the raw notes or structure.",
-      "source": "notas" // or "estructura" if it's boilerplate
+      "source": "notas" // or "estructura" if the content is boilerplate or not explicitly backed by the field notes.
     }
   ]
 }
@@ -68,7 +72,7 @@ Return ONLY a valid JSON object matching the following structure. Do not return 
       const errorText = await response.text();
       console.error("Anthropic API error:", errorText);
       return NextResponse.json(
-        { error: "Failed to generate document with Anthropic." },
+        { error: "Error al generar el documento con Anthropic." },
         { status: response.status }
       );
     }
@@ -82,7 +86,7 @@ Return ONLY a valid JSON object matching the following structure. Do not return 
       },
     });
   } catch (error) {
-    console.error("Error in bitacora agent route:", error);
+    console.error("Error in generate route:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

@@ -2,7 +2,7 @@
 
 La construcción corre sobre documentos no estructurados y decisiones de campo: planos en PDF, cronogramas, estimaciones, bitácoras y correos. Los equipos senior gastan sus horas siendo un puente humano que copia, concilia y busca, en lugar de dirigir la obra. Ahí se pierden margen y tiempo.
 
-mnnsor es la capa de agentes de IA, con gobernanza humana, que corre encima del stack que la constructora ya usa (Procore, P6, Revit, Excel) y convierte esa documentación en decisiones con evidencia. Los agentes proponen; el equipo senior autoriza; todo queda en una bitácora auditable. Empezamos por un solo agente, Atlas, en la oficina técnica, y crecemos módulo por módulo.
+mnnsor es la capa de agentes de IA, con gobernanza humana, que corre encima del stack que la constructora ya usa (Procore, P6, Revit, Excel) y convierte esa documentación en decisiones con evidencia. Los agentes proponen; el equipo senior autoriza; todo queda en una bitácora auditable. Empezamos por nuestro agente insignia: **Atlas**, en la oficina técnica, y creceremos como una expansión modular de captura y coordinación.
 
 Tres creencias que guían cada decisión de producto e ingeniería:
 

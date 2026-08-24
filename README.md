@@ -27,7 +27,7 @@ compilar, correr y ser probable antes de pasar a la siguiente.
   - Next.js + TS + Tailwind, tokens de diseño mnnsor monocromo (IBM Plex),
     tema claro/oscuro/sistema sin parpadeo.
   - Clientes de Supabase (navegador + servidor) listos para Fase 2.
-  - Catálogo de los 7 agentes como configuración compartida.
+  - Catálogo de agentes como configuración compartida, con Atlas como agente insignia.
   - **App shell** completo: sidebar con navegación y agentes, barra superior
     con selector de obra, plan/consumo, tema y menú de cuenta, paleta de
     comandos (⌘K), y drawer móvil.
@@ -60,9 +60,9 @@ compilar, correr y ser probable antes de pasar a la siguiente.
   - **Onboarding de primer uso**: un primer documento guiado en vez de caer en un
     dashboard con datos de ejemplo (que quedan como opción para explorar).
 - [x] Fase 3 — Auth + multi-tenant (login email/Google, organización, RLS).
-- [ ] Fase 4 — Obras + motor del agente Bitácora end-to-end + biblioteca.
+- [ ] Fase 4 — Obras + motor del agente Atlas end-to-end + biblioteca.
 - [ ] Fase 5 — Función estrella: subir formato → llenarlo preservando formato.
-- [ ] Fase 6 — Los otros 6 agentes por configuración.
+- [ ] Fase 6 — Los otros agentes de captura por configuración.
 - [ ] Fase 7 — Facturación (Stripe).
 - [ ] Fase 8 — Analítica (`usage_events`).
 - [ ] Fase 9 — Pulido.

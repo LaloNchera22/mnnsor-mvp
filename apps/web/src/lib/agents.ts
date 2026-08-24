@@ -11,6 +11,7 @@
  */
 
 export type DocType =
+  | "atlas"
   | "bitacora"
   | "permiso"
   | "plan"
@@ -33,9 +34,32 @@ export interface AgentConfig {
   pista: string;
   /** Ejemplo de notas crudas que rellena el placeholder / botón "usar ejemplo". */
   ejemplo: string;
+  /** Marca si el agente es el principal por defecto (ej. punto de entrada). */
+  isFlagship?: boolean;
 }
 
 export const AGENTS: AgentConfig[] = [
+  {
+    docType: "atlas",
+    slug: "ATL",
+    nombre: "Atlas",
+    descripcion:
+      "Documento técnico formal con procedencia visible y bloque de gobernanza (propone → revisa → aprueba).",
+    categoria: "Coordinación",
+    secciones: [
+      "Resumen ejecutivo",
+      "Alcance",
+      "Hallazgos / análisis",
+      "Propuesta",
+      "Riesgos y supuestos",
+      "Aprobaciones (elaboró · revisó · autorizó)",
+    ],
+    pista:
+      "Escribe tus notas de campo o adjunta documentación para generar el documento técnico.",
+    ejemplo:
+      "Revisión de planos estructurales nivel 2, encontramos discrepancia en trabe T-4. Proponemos reforzar con placa de acero de 1/2 pulgada. Riesgo de retraso si no se aprueba hoy.",
+    isFlagship: true,
+  },
   {
     docType: "bitacora",
     slug: "BIT",
