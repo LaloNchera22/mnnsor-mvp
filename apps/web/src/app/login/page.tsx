@@ -8,6 +8,7 @@ import { Field, Input } from "@/components/ui/Field";
 import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
 import { useToast } from "@/components/ui/Toast";
 import { IconArrowRight, IconBolt, IconShield, IconSignature } from "@/components/ui/icons";
+import { login, loginWithGoogle } from "./actions";
 
 const FEATURES = [
   { icon: <IconBolt width={18} height={18} />, title: "De la nota al documento", desc: "Escribe como hablas en campo; recibe el formato formal." },
@@ -17,16 +18,35 @@ const FEATURES = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const { info } = useToast();
+  const { info, warning } = useToast();
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    // Demo: Auth real (Supabase) llega en Fase 2.
-    window.setTimeout(() => router.push("/"), 700);
+
+    const formData = new FormData();
+    formData.append("email", email);
+    formData.append("password", pass);
+
+    const result = await login(formData);
+
+    if (result?.error) {
+      warning("Error al iniciar sesión", result.error);
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setIsGoogleLoading(true);
+    const result = await loginWithGoogle();
+    if (result?.error) {
+      warning("Error con Google", result.error);
+      setIsGoogleLoading(false);
+    }
   }
 
   return (
@@ -94,7 +114,8 @@ export default function LoginPage() {
               variant="secondary"
               className="w-full"
               leftIcon={<GoogleGlyph />}
-              onClick={() => info("Google Sign-In", "El acceso con Google se conecta en Fase 2.")}
+              onClick={handleGoogleLogin}
+              loading={isGoogleLoading}
             >
               Continuar con Google
             </Button>
@@ -146,8 +167,25 @@ export default function LoginPage() {
             <p className="mt-6 text-center text-[0.8125rem] text-ink-3">
               ¿No tienes cuenta?{" "}
               <button
-                onClick={() => info("Registro", "El alta de organizaciones llega en Fase 2.")}
+                type="button"
+                onClick={async () => {
+                   if (!email || !pass) {
+                      warning("Registro", "Ingresa correo y contraseña para crear tu cuenta.");
+                      return;
+                   }
+                   setLoading(true);
+                   const formData = new FormData();
+                   formData.append("email", email);
+                   formData.append("password", pass);
+                   const { signup } = await import("./actions");
+                   const result = await signup(formData);
+                   if (result?.error) {
+                      warning("Error al registrarse", result.error);
+                      setLoading(false);
+                   }
+                }}
                 className="font-medium text-ink underline underline-offset-2"
+                disabled={loading}
               >
                 Crea tu organización
               </button>

@@ -59,7 +59,7 @@ compilar, correr y ser probable antes de pasar a la siguiente.
     del formato, para reforzar que mnnsor no inventa datos.
   - **Onboarding de primer uso**: un primer documento guiado en vez de caer en un
     dashboard con datos de ejemplo (que quedan como opción para explorar).
-- [ ] Fase 3 — Auth + multi-tenant (login email/Google, organización, RLS).
+- [x] Fase 3 — Auth + multi-tenant (login email/Google, organización, RLS).
 - [ ] Fase 4 — Obras + motor del agente Bitácora end-to-end + biblioteca.
 - [ ] Fase 5 — Función estrella: subir formato → llenarlo preservando formato.
 - [ ] Fase 6 — Los otros 6 agentes por configuración.
